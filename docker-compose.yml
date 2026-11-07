@@ -1,0 +1,70 @@
+# Local development only. Azure uses Container Apps + Azure SQL serverless instead.
+#   docker compose up --build
+#   expenses:    http://localhost:8001/health
+#   settlements: http://localhost:8002/health
+#   UI:          python3 -m http.server 8080 -d ui   ->  http://localhost:8080
+#
+# The SQL Server password below is a throwaway default for a local container
+# that never leaves your machine. Override it in .env if you like.
+
+x-sql-env: &sql-env
+  ACCEPT_EULA: "Y"
+  MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-LocalDevOnly123}
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64 # runs under Rosetta on Apple Silicon
+    environment: *sql-env
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # One-shot: creates one database per service, like the two Azure SQL databases.
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    environment: *sql-env
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    entrypoint:
+      - /bin/bash
+      - -c
+      - >-
+        /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q
+        "IF DB_ID('expenses') IS NULL CREATE DATABASE expenses;
+        IF DB_ID('settlements') IS NULL CREATE DATABASE settlements;"
+    restart: "no"
+
+  expenses:
+    build: ./services/expenses
+    environment:
+      SERVICE_NAME: expenses
+      DATABASE_URL: mssql+pyodbc://sa:${MSSQL_SA_PASSWORD:-LocalDevOnly123}@sqlserver:1433/expenses?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      API_KEY: ${API_KEY:-dev-key}
+      CORS_ORIGIN: http://localhost:8080
+    ports:
+      - "8001:8000"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+
+  settlements:
+    build: ./services/settlements
+    environment:
+      SERVICE_NAME: settlements
+      DATABASE_URL: mssql+pyodbc://sa:${MSSQL_SA_PASSWORD:-LocalDevOnly123}@sqlserver:1433/settlements?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes
+      API_KEY: ${API_KEY:-dev-key}
+      CORS_ORIGIN: http://localhost:8080
+      EXPENSES_URL: http://expenses:8000
+    ports:
+      - "8002:8000"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully

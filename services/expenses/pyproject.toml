@@ -1,0 +1,16 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations/script.py.mako"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "--cov=app --cov-report=term-missing --cov-fail-under=70"
+
+[tool.coverage.run]
+# Coverage gate applies to core logic. Startup and DB wiring are exercised by
+# docker compose and the post-deploy health check instead.
+omit = ["app/migrate.py", "app/db/session.py"]
