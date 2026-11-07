@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Splitwise-lite</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+      .status { font-weight: 600; }
+      .up { color: #1a7f37; }
+      .down { color: #cf222e; }
+    </style>
+  </head>
+  <body>
+    <h1>Splitwise-lite</h1>
+    <p>Split shared expenses and settle up with the fewest transfers.</p>
+    <ul>
+      <li>expenses-service: <span id="expenses-status" class="status">checking…</span></li>
+      <li>settlements-service: <span id="settlements-status" class="status">checking…</span></li>
+    </ul>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
