@@ -42,3 +42,4 @@ Team, roles and product agreed; repository, backlog and Definition of Done in pl
 - Keep PRs small and review within 24 hours.
 - Move your own cards on the board every day.
 - If main goes red, fixing it comes before any new work.
+- Daily reviewer rotation (Hadi → Amit → Fernando → Ruben → Athul, starting Wed 11); nobody approves their own PR.
