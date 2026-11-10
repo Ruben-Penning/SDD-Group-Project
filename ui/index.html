@@ -9,6 +9,11 @@
       .status { font-weight: 600; }
       .up { color: #1a7f37; }
       .down { color: #cf222e; }
+      .note { color: #6e7781; font-size: 0.9rem; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #d0d7de; }
+      .amount { text-align: right; font-variant-numeric: tabular-nums; }
+      tfoot td { font-weight: 600; border-bottom: none; }
     </style>
   </head>
   <body>
@@ -18,7 +23,28 @@
       <li>expenses-service: <span id="expenses-status" class="status">checking…</span></li>
       <li>settlements-service: <span id="settlements-status" class="status">checking…</span></li>
     </ul>
+
+    <section id="group">
+      <h2 id="group-name">Loading group…</h2>
+      <p class="note">Sample data until the expenses API is ready.</p>
+
+      <h3>Members</h3>
+      <ul id="member-list"></ul>
+
+      <h3>Expenses</h3>
+      <table>
+        <thead>
+          <tr><th>Description</th><th>Paid by</th><th class="amount">Amount</th></tr>
+        </thead>
+        <tbody id="expense-rows"></tbody>
+        <tfoot>
+          <tr><td colspan="2">Total</td><td id="expense-total" class="amount"></td></tr>
+        </tfoot>
+      </table>
+    </section>
+
     <script src="config.js"></script>
+    <script src="fake-data.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
