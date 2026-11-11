@@ -1,5 +1,6 @@
 """Rules for recording a payment. Pure functions: no database or HTTP imports."""
 
+
 class InvalidPaymentError(ValueError):
     """A payment that breaks a business rule (the API turns it into a 400)."""
 
