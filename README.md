@@ -5,6 +5,8 @@ A web app where a group logs shared expenses and sees the fewest transfers neede
 
 **Live URL:** _added after the first deploy_
 
+**Backlog (GitHub Project):** (https://github.com/users/athulgokuldas22/projects/3)
+
 ## Architecture
 
 Two FastAPI services, each in its own container with its own database. A static UI calls both from the browser.
@@ -77,8 +79,16 @@ _Added with the infrastructure (Bicep) and CD pipeline._
 
 | Name | GitHub | Area |
 | --- | --- | --- |
+| Hadi | [@hadimoumeni](https://github.com/hadimoumeni) | expenses-service |
+| Amit | [@amayer2024](https://github.com/amayer2024) | settlements-service |
+| Fernando | [@f3renp](https://github.com/f3renp) | UI |
 | Ruben | [@Geulo](https://github.com/Geulo) | Infrastructure and pipeline |
-| | | |
-| | | |
-| | | |
-| | | |
+| Athul | [@athulgokuldas22](https://github.com/athulgokuldas22) | Monitoring and documentation |
+
+### Scrum roles
+
+| Sprint | Dates | Product Owner | Scrum Master |
+| --- | --- | --- | --- |
+| Sprint 0 | 4–10 Nov | Hadi | Athul |
+| Sprint 1 | 11–18 Nov | Fernando | Ruben |
+| Sprint 2 | 19–24 Nov | Amit | Hadi |
