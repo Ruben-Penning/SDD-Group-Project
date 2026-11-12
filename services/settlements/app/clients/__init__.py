@@ -1,0 +1,1 @@
+"""Clients for other services. Same role as app/db: data access, no business rules."""
