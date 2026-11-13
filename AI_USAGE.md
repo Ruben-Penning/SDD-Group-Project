@@ -16,3 +16,4 @@ One row per significant AI-assisted piece of work.
 | 2026-11-12 | Fer (f3renp) | Claude | UI groups and members: group list, create group and add member forms, API error messages | Tested in a browser against a stand-in API; draft until the expenses endpoints are merged |
 | 2026-11-13 | Athul (athulgokuldas22) | Claude | data-model.md: ER diagram and table descriptions from the migrations | Checked every table, column and constraint against both migration files; reviewed in PR |
 
+| 2026-11-13 | Hadi (hadimoumeni) | Claude | expenses GET /groups/{id}/ledger (net paid minus owed per member), ledger domain function, tests | Ran ruff, pytest (68 passed, 99% coverage); ran both services with docker compose on SQL Server and called settlements fetch_ledger() against it, also with expenses stopped (503 path); reviewed in PR |
