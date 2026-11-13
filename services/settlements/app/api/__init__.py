@@ -2,7 +2,8 @@
 
 from fastapi import APIRouter
 
-from app.api import payments
+from app.api import balances, payments
 
 router = APIRouter()
 router.include_router(payments.router)
+router.include_router(balances.router)
