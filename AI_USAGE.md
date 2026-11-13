@@ -12,6 +12,7 @@ One row per significant AI-assisted piece of work.
 | 2026-11-10 | Fer (f3renp) | Claude | Help UI group page with sample data | Ran it locally with both services up and checked the page |
 | 2026-11-11 | Amit | Claude | settlements payments CRUD (record, list, undo), payment validation rules, API and domain tests | Ran ruff, pytest (28 passed, 100% coverage) and a migrate + POST/GET/DELETE round trip on SQLite; reviewed in PR |
 | 2026-11-12 | Hadi (hadimoumeni) | Claude | expenses groups and members endpoints (GET/POST /groups, GET /groups/{id}, GET/POST /groups/{id}/members), duplicate-name check, tests | Ran ruff, pytest (35 passed, 98% coverage); checked the response shapes against the UI draft in #30; reviewed in PR |
+| 2026-11-12 | Hadi (hadimoumeni) | Claude | expenses endpoints (GET/POST /groups/{id}/expenses), equal split with leftover cents, member checks, tests | Ran ruff, pytest (58 passed, 99% coverage) and the full groups/members/expenses flow with docker compose against SQL Server; reviewed in PR |
 | 2026-11-12 | Fer (f3renp) | Claude | UI groups and members: group list, create group and add member forms, API error messages | Tested in a browser against a stand-in API; draft until the expenses endpoints are merged |
 | 2026-11-13 | Athul (athulgokuldas22) | Claude | data-model.md: ER diagram and table descriptions from the migrations | Checked every table, column and constraint against both migration files; reviewed in PR |
 

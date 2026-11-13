@@ -11,7 +11,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -54,6 +54,10 @@ class Expense(Base):
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.current_timestamp()
+    )
+    # Python-side link only (no schema change): saving an expense saves its shares.
+    shares: Mapped[list["ExpenseShare"]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin", order_by="ExpenseShare.member_id"
     )
 
 
