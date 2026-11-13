@@ -9,11 +9,16 @@
       .status { font-weight: 600; }
       .up { color: #1a7f37; }
       .down { color: #cf222e; }
-      .note { color: #6e7781; font-size: 0.9rem; }
+      .error { color: #cf222e; min-height: 1.2em; margin: 0.25rem 0 0; }
       table { width: 100%; border-collapse: collapse; }
       th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #d0d7de; }
       .amount { text-align: right; font-variant-numeric: tabular-nums; }
       tfoot td { font-weight: 600; border-bottom: none; }
+      form { margin-top: 0.75rem; }
+      label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+      input { padding: 0.35rem 0.5rem; font: inherit; }
+      button { padding: 0.35rem 0.75rem; font: inherit; cursor: pointer; }
+      button:disabled { cursor: wait; opacity: 0.6; }
     </style>
   </head>
   <body>
@@ -24,27 +29,47 @@
       <li>settlements-service: <span id="settlements-status" class="status">checking…</span></li>
     </ul>
 
-    <section id="group">
+    <!-- Shown when the URL has no ?group=ID -->
+    <section id="groups-view" hidden>
+      <h2>Groups</h2>
+      <ul id="group-list"><li>Loading groups…</li></ul>
+      <form id="new-group-form">
+        <label for="new-group-name">New group</label>
+        <input id="new-group-name" name="name" required maxlength="100" placeholder="Lisbon trip" />
+        <button type="submit">Create group</button>
+        <p class="error" role="alert"></p>
+      </form>
+    </section>
+
+    <!-- Shown when the URL is ?group=ID -->
+    <section id="group-view" hidden>
+      <p><a href="./">← All groups</a></p>
       <h2 id="group-name">Loading group…</h2>
-      <p class="note">Sample data until the expenses API is ready.</p>
 
-      <h3>Members</h3>
-      <ul id="member-list"></ul>
+      <div id="group-details" hidden>
+        <h3>Members</h3>
+        <ul id="member-list"></ul>
+        <form id="new-member-form">
+          <label for="new-member-name">Add member</label>
+          <input id="new-member-name" name="name" required maxlength="100" placeholder="Ana" />
+          <button type="submit">Add</button>
+          <p class="error" role="alert"></p>
+        </form>
 
-      <h3>Expenses</h3>
-      <table>
-        <thead>
-          <tr><th>Description</th><th>Paid by</th><th class="amount">Amount</th></tr>
-        </thead>
-        <tbody id="expense-rows"></tbody>
-        <tfoot>
-          <tr><td colspan="2">Total</td><td id="expense-total" class="amount"></td></tr>
-        </tfoot>
-      </table>
+        <h3>Expenses</h3>
+        <table>
+          <thead>
+            <tr><th>Description</th><th>Paid by</th><th class="amount">Amount</th></tr>
+          </thead>
+          <tbody id="expense-rows"></tbody>
+          <tfoot>
+            <tr><td colspan="2">Total</td><td id="expense-total" class="amount"></td></tr>
+          </tfoot>
+        </table>
+      </div>
     </section>
 
     <script src="config.js"></script>
-    <script src="fake-data.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
