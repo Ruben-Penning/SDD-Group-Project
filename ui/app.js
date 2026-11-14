@@ -96,25 +96,40 @@ function currentGroupId() {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+// A problem with what the user typed, caught before calling the API.
+class FormError extends Error {}
+
+// Turns what the user typed ("12", "12.5", "12,50") into integer cents, without
+// going through a float, so 0.1 + 0.2 rounding can never creep in.
+function parseAmountToCents(text) {
+  const match = text.trim().replace(",", ".").match(/^(\d{1,7})(?:\.(\d{1,2}))?$/);
+  if (!match) throw new FormError("Enter an amount like 12.50 (up to 2 decimals).");
+  const cents = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
+  if (cents === 0) throw new FormError("The amount must be more than 0.");
+  return cents;
+}
+
+function requiredText(form, field, message) {
+  const value = form.elements[field].value.trim();
+  if (!value) throw new FormError(message);
+  return value;
+}
+
 // Runs a form's request with the button disabled, so a double click can't
 // create the same thing twice. Shows the error under the form if it fails.
+// `action` gets the form, reads its fields and throws FormError for bad input.
 function handleSubmit(form, action) {
   const button = form.querySelector("button");
   const error = form.querySelector(".error");
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const name = form.elements.name.value.trim();
-    if (!name) {
-      error.textContent = "Enter a name.";
-      return;
-    }
     button.disabled = true;
     error.textContent = "";
     try {
-      await action(name);
+      await action(form);
       form.reset();
     } catch (err) {
-      error.textContent = formError(err);
+      error.textContent = err instanceof FormError ? err.message : formError(err);
     } finally {
       button.disabled = false;
     }
@@ -143,7 +158,8 @@ async function showGroups() {
     list.replaceChildren(listItem(loadError(err, "groups")));
   }
 
-  handleSubmit(document.getElementById("new-group-form"), async (name) => {
+  handleSubmit(document.getElementById("new-group-form"), async (form) => {
+    const name = requiredText(form, "name", "Enter a name.");
     const group = await api(expensesUrl, "/groups", {
       method: "POST",
       body: JSON.stringify({ name }),
@@ -208,17 +224,81 @@ async function showGroup(groupId) {
   document.title = `${group.name} · Splitwise-lite`;
   document.getElementById("group-details").hidden = false;
 
-  const members = await loadMembers(groupId);
+  let members = await loadMembers(groupId);
   await loadExpenses(groupId, members);
+  renderExpenseForm(members);
 
-  handleSubmit(document.getElementById("new-member-form"), async (name) => {
+  handleSubmit(document.getElementById("new-member-form"), async (form) => {
+    const name = requiredText(form, "name", "Enter a name.");
     await api(expensesUrl, `/groups/${groupId}/members`, {
       method: "POST",
       body: JSON.stringify({ name }),
     });
-    const updated = await loadMembers(groupId);
-    await loadExpenses(groupId, updated);
+    members = await loadMembers(groupId);
+    await loadExpenses(groupId, members);
+    renderExpenseForm(members);
   });
+
+  const expenseForm = document.getElementById("new-expense-form");
+  handleSubmit(expenseForm, async (form) => {
+    const body = readExpenseForm(form);
+    await api(expensesUrl, `/groups/${groupId}/expenses`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    await loadExpenses(groupId, members);
+  });
+  // form.reset() unticks nothing we ticked in code, so re-tick everyone after each reset.
+  expenseForm.addEventListener("reset", () => setTimeout(() => renderExpenseForm(members)));
+}
+
+// ---------- Add expense form ----------
+
+// Fills "Paid by" and the "Split between" checkboxes from the member list.
+// Everyone is ticked by default: most expenses are shared by the whole group.
+function renderExpenseForm(members) {
+  const form = document.getElementById("new-expense-form");
+  const hasMembers = members.length > 0;
+  form.hidden = !hasMembers;
+  document.getElementById("expense-form-note").hidden = hasMembers;
+
+  const options = members.map((m) => {
+    const option = document.createElement("option");
+    option.value = String(m.id);
+    option.textContent = m.name;
+    return option;
+  });
+  form.elements.payer.replaceChildren(...options);
+
+  const checks = members.map((m) => {
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.name = "split";
+    box.value = String(m.id);
+    box.checked = true;
+    const label = document.createElement("label");
+    label.className = "check";
+    label.append(box, ` ${m.name}`);
+    return label;
+  });
+  document.getElementById("expense-split").replaceChildren(...checks);
+}
+
+// Reads and checks the form, returning the body POST /groups/{id}/expenses expects.
+// The service does the equal split itself, so the UI only sends who shares it.
+function readExpenseForm(form) {
+  const description = requiredText(form, "description", "Enter a description.");
+  const amountCents = parseAmountToCents(form.elements.amount.value);
+  const memberIds = [...form.querySelectorAll('input[name="split"]:checked')].map((box) =>
+    Number(box.value),
+  );
+  if (memberIds.length === 0) throw new FormError("Tick at least one person to split with.");
+  return {
+    description,
+    amount_cents: amountCents,
+    paid_by_member_id: Number(form.elements.payer.value),
+    member_ids: memberIds,
+  };
 }
 
 // ---------- Start ----------
