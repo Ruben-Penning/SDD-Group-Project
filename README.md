@@ -3,7 +3,7 @@
 Group project for the Software Development and DevOps course (BCSAI, IE University).
 A web app where a group logs shared expenses and sees the fewest transfers needed to settle up.
 
-**Live URL:** _added after the first deploy_
+**Live URL:** https://stuirahgkb56ldciu.z1.web.core.windows.net (deployed by CD on every merge to `main`)
 
 **Backlog (GitHub Project):** (https://github.com/users/athulgokuldas22/projects/3)
 
@@ -73,7 +73,70 @@ alembic revision -m "create groups table"   # then edit the file in migrations/v
 
 ## Azure setup
 
-_Added with the infrastructure (Bicep) and CD pipeline._
+Everything runs in one resource group, `rg-sdd-splitwise`, in Germany West Central, defined in
+[`infra/main.bicep`](infra/main.bicep). Nothing is created by hand except the one-time bootstrap below.
+
+| Resource | Name | Notes |
+| --- | --- | --- |
+| Container App | `sdd-splitwise-expenses` | public HTTPS, scales 0–1 replicas |
+| Container App | `sdd-splitwise-settlements` | same, plus `EXPENSES_URL` |
+| Container Apps environment | `sdd-splitwise-env` | sends container stdout to Log Analytics |
+| Log Analytics workspace | `sdd-splitwise-logs` | table `ContainerAppConsoleLogs_CL`, see [queries](docs/monitoring/queries.md) |
+| Azure SQL server | `sdd-splitwise-sql-…` | databases `expenses` and `settlements`: serverless, free offer, auto-pause after 1 h |
+| Storage account | `stui…` | static website that serves `ui/` |
+
+Azure for Students only allows five regions (Spain Central, Norway East, Germany West Central,
+Italy North, Poland Central). That decided two things:
+
+- The UI is a Storage static website, not a Static Web App, because Static Web Apps is not
+  offered in any of those regions.
+- Everything runs in Germany West Central, because the Azure SQL free offer is not available
+  in Spain Central.
+
+### How a deploy works
+
+[`cd.yml`](.github/workflows/cd.yml) runs after CI passes on `main`. You can also start it
+from Actions → CD → Run workflow.
+
+1. Build both images and push them to GHCR, tagged with the commit SHA.
+2. Sign in to Azure with OIDC. There is no stored Azure password.
+3. Deploy `infra/main.bicep` with the new images. Each container runs its migrations on startup.
+4. Poll `/health` on both services for up to 5 minutes. The run fails if either never returns 200.
+5. Write `config.js` with the service URLs and API key, and upload `ui/` to the static website.
+6. Check that the UI and its `config.js` load (retries for up to 5 minutes).
+
+### Secrets
+
+They live only in the GitHub environment `production` (deploys from `main` only) and in
+Container App secrets, never in the repo or the images.
+
+| Name | Kind | Meaning |
+| --- | --- | --- |
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | variable | the deploy identity GitHub signs in as |
+| `AZURE_RESOURCE_GROUP` | variable | `rg-sdd-splitwise` |
+| `SQL_ADMIN_PASSWORD` | secret | Azure SQL admin password, generated |
+| `API_KEY` | secret | shared demo key, generated; the UI sends it, so it is visible in the browser |
+
+### One-time bootstrap
+
+Already done for `rg-sdd-splitwise`. To set it up again, from the repo root, with Owner on the
+subscription and admin on the repo:
+
+```bash
+az login && gh auth login
+./infra/bootstrap.sh                    # add --rotate-secrets to generate new secrets
+```
+
+It creates the resource group, a managed identity that trusts GitHub's OIDC tokens for the
+`production` environment only (Contributor on this resource group), the GitHub environment,
+and its variables and secrets. After rotating secrets, run CD again.
+
+### Cold starts
+
+Both services scale to zero and the databases auto-pause, so the first request after a quiet
+spell can take up to a minute or two. Settlements calls expenses with a 2 s timeout, so the first
+balances call after idle may return 503 ("try again shortly"); the next one works. Open the UI a
+minute before a demo.
 
 ## Team
 
