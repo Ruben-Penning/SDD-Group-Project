@@ -16,7 +16,12 @@
       tfoot td { font-weight: 600; border-bottom: none; }
       form { margin-top: 0.75rem; }
       label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
-      input { padding: 0.35rem 0.5rem; font: inherit; }
+      input, select { padding: 0.35rem 0.5rem; font: inherit; }
+      #new-expense-form label { margin-top: 0.6rem; }
+      #new-expense-form label.check { display: inline-block; font-weight: normal; margin: 0 1rem 0 0; }
+      fieldset { border: 1px solid #d0d7de; margin: 0.75rem 0; padding: 0.5rem 0.75rem; }
+      legend { font-weight: 600; }
+      .note { color: #6e7781; }
       button { padding: 0.35rem 0.75rem; font: inherit; cursor: pointer; }
       button:disabled { cursor: wait; opacity: 0.6; }
     </style>
@@ -66,6 +71,27 @@
             <tr><td colspan="2">Total</td><td id="expense-total" class="amount"></td></tr>
           </tfoot>
         </table>
+
+        <p id="expense-form-note" class="note" hidden>Add a member before adding expenses.</p>
+        <form id="new-expense-form" hidden>
+          <h3>Add expense</h3>
+          <label for="expense-description">Description</label>
+          <input id="expense-description" name="description" required maxlength="200" placeholder="Dinner" />
+
+          <label for="expense-amount">Amount (€)</label>
+          <input id="expense-amount" name="amount" required inputmode="decimal" placeholder="12.50" />
+
+          <label for="expense-payer">Paid by</label>
+          <select id="expense-payer" name="payer"></select>
+
+          <fieldset>
+            <legend>Split equally between</legend>
+            <div id="expense-split"></div>
+          </fieldset>
+
+          <button type="submit">Add expense</button>
+          <p class="error" role="alert"></p>
+        </form>
       </div>
     </section>
 
