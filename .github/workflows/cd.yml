@@ -1,0 +1,160 @@
+name: CD
+
+# Deploys main to Azure after CI passes on it. Can also be started by hand from
+# the Actions tab. One-time setup: infra/bootstrap.sh.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deploys run one at a time, in order.
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Azure
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.bicep.outputs.ui_url }}
+    permissions:
+      contents: read
+      packages: write # push images to GHCR
+      id-token: write # sign in to Azure with OIDC
+    env:
+      # The commit CI tested, not whatever main points at by now.
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push images (tagged with the commit SHA)
+        id: images
+        run: |
+          registry="ghcr.io/${GITHUB_REPOSITORY,,}"
+          for svc in expenses settlements; do
+            image="$registry/$svc:$SHA"
+            docker build \
+              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+              --label "org.opencontainers.image.revision=$SHA" \
+              -t "$image" "services/$svc"
+            docker push "$image"
+            echo "$svc=$image" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infrastructure and services (Bicep)
+        id: bicep
+        env:
+          SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          outputs=$(az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "cd-${SHA::7}-${GITHUB_RUN_ATTEMPT}" \
+            --template-file infra/main.bicep \
+            --parameters \
+              expensesImage="${{ steps.images.outputs.expenses }}" \
+              settlementsImage="${{ steps.images.outputs.settlements }}" \
+              sqlAdminPassword="$SQL_ADMIN_PASSWORD" \
+              apiKey="$API_KEY" \
+            --query properties.outputs --output json)
+          {
+            echo "expenses_url=$(jq -r .expensesUrl.value <<<"$outputs")"
+            echo "settlements_url=$(jq -r .settlementsUrl.value <<<"$outputs")"
+            echo "ui_url=$(jq -r .uiUrl.value <<<"$outputs")"
+            echo "ui_storage=$(jq -r .uiStorageAccount.value <<<"$outputs")"
+          } >> "$GITHUB_OUTPUT"
+
+      # Scale to zero plus SQL auto-pause: the first request can take a few minutes.
+      - name: Wait for /health on both services
+        env:
+          EXPENSES_URL: ${{ steps.bicep.outputs.expenses_url }}
+          SETTLEMENTS_URL: ${{ steps.bicep.outputs.settlements_url }}
+        run: |
+          for url in "$EXPENSES_URL" "$SETTLEMENTS_URL"; do
+            deadline=$((SECONDS + 300))
+            until curl -fsS --max-time 30 "$url/health"; do
+              if (( SECONDS >= deadline )); then
+                echo "::error::$url/health did not return 200 within 5 minutes"
+                exit 1
+              fi
+              echo "Waiting for $url/health"
+              sleep 10
+            done
+            echo
+          done
+
+      - name: Publish the UI (static website)
+        env:
+          EXPENSES_URL: ${{ steps.bicep.outputs.expenses_url }}
+          SETTLEMENTS_URL: ${{ steps.bicep.outputs.settlements_url }}
+          API_KEY: ${{ secrets.API_KEY }}
+          AZURE_STORAGE_ACCOUNT: ${{ steps.bicep.outputs.ui_storage }}
+        run: |
+          AZURE_STORAGE_KEY=$(az storage account keys list \
+            --resource-group "$RESOURCE_GROUP" --account-name "$AZURE_STORAGE_ACCOUNT" \
+            --query '[0].value' --output tsv)
+          echo "::add-mask::$AZURE_STORAGE_KEY"
+          export AZURE_STORAGE_KEY
+
+          site="$RUNNER_TEMP/ui"
+          cp -R ui "$site"
+          cat > "$site/config.js" <<EOF
+          // Written by the CD pipeline for commit $SHA.
+          // The API key is a shared demo key, visible to anyone using the UI by design.
+          window.APP_CONFIG = {
+            expensesUrl: "$EXPENSES_URL",
+            settlementsUrl: "$SETTLEMENTS_URL",
+            apiKey: "$API_KEY",
+          };
+          EOF
+
+          az storage blob service-properties update \
+            --static-website --index-document index.html --404-document index.html --output none
+          az storage blob upload-batch \
+            --destination '$web' --source "$site" --overwrite \
+            --content-cache-control "no-cache" --output none
+
+      # A newly enabled static website can take a few minutes to start serving.
+      - name: Check the UI is live
+        env:
+          UI_URL: ${{ steps.bicep.outputs.ui_url }}
+          EXPENSES_URL: ${{ steps.bicep.outputs.expenses_url }}
+        run: |
+          deadline=$((SECONDS + 300))
+          until curl -fsS --max-time 30 "$UI_URL/" | grep -q 'app.js' &&
+                curl -fsS --max-time 30 "$UI_URL/config.js" | grep -qF "$EXPENSES_URL"; do
+            if (( SECONDS >= deadline )); then
+              echo "::error::$UI_URL did not serve this deploy's UI within 5 minutes"
+              exit 1
+            fi
+            echo "Waiting for $UI_URL"
+            sleep 10
+          done
+          echo "UI: $UI_URL"
