@@ -19,6 +19,9 @@ param location string = 'spaincentral'
 @description('GitHub repository as owner/name.')
 param githubRepo string
 
+@description('The same repository with GitHub IDs, as owner@ownerId/name@repoId. GitHub puts this form in the OIDC subject for this repo.')
+param githubRepoWithIds string
+
 @description('GitHub environment the CD job runs in. Only that environment can sign in.')
 param githubEnvironment string = 'production'
 
@@ -32,7 +35,11 @@ module deployIdentity 'modules/deploy-identity.bicep' = {
   scope: rg
   params: {
     location: location
-    subject: 'repo:${githubRepo}:environment:${githubEnvironment}'
+    // GitHub may send either form of the subject, so trust both.
+    subjects: [
+      'repo:${githubRepo}:environment:${githubEnvironment}'
+      'repo:${githubRepoWithIds}:environment:${githubEnvironment}'
+    ]
   }
 }
 
