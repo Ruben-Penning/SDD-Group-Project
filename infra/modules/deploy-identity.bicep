@@ -4,25 +4,29 @@
 
 param location string
 
-@description('OIDC subject GitHub sends, for example repo:owner/name:environment:production.')
-param subject string
+@description('OIDC subjects to trust, for example repo:owner/name:environment:production.')
+param subjects array
 
 resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: 'id-github-deploy'
   location: location
 }
 
-resource githubTrust 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = {
-  parent: identity
-  name: 'github-actions'
-  properties: {
-    issuer: 'https://token.actions.githubusercontent.com'
-    subject: subject
-    audiences: [
-      'api://AzureADTokenExchange'
-    ]
+// Azure rejects parallel writes of federated credentials on one identity.
+@batchSize(1)
+resource githubTrust 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = [
+  for (subject, i) in subjects: {
+    parent: identity
+    name: i == 0 ? 'github-actions' : 'github-actions-${i}'
+    properties: {
+      issuer: 'https://token.actions.githubusercontent.com'
+      subject: subject
+      audiences: [
+        'api://AzureADTokenExchange'
+      ]
+    }
   }
-}
+]
 
 var contributorRoleId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
