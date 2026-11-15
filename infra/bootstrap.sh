@@ -24,12 +24,16 @@ for ns in Microsoft.App Microsoft.OperationalInsights Microsoft.Sql Microsoft.St
   az provider register --namespace "$ns" --wait --output none
 done
 
+# GitHub's OIDC subject for this repo includes the owner and repo IDs
+# (repo:owner@123/name@456:...), so look them up.
+REPO_WITH_IDS=$(gh api "repos/$REPO" --jq '"\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"')
+
 echo "Creating $RESOURCE_GROUP and the deploy identity"
 outputs=$(az deployment sub create \
   --name bootstrap \
   --location "$LOCATION" \
   --template-file infra/bootstrap.bicep \
-  --parameters resourceGroupName="$RESOURCE_GROUP" location="$LOCATION" githubRepo="$REPO" \
+  --parameters resourceGroupName="$RESOURCE_GROUP" location="$LOCATION" githubRepo="$REPO" githubRepoWithIds="$REPO_WITH_IDS" \
   --query properties.outputs --output json)
 output() { jq -r ".$1.value" <<<"$outputs"; }
 
