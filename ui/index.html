@@ -27,6 +27,9 @@
       #balance-list, #transfer-list { list-style: none; padding-left: 0; }
       #balance-list li, #transfer-list li { padding: 0.2rem 0; }
       h4 { margin-bottom: 0.25rem; }
+      .actions { text-align: right; white-space: nowrap; }
+      .actions button { padding: 0.15rem 0.5rem; font-size: 0.9rem; margin-left: 0.25rem; }
+      tr.editing td { background: #fff8c5; }
       button { padding: 0.35rem 0.75rem; font: inherit; cursor: pointer; }
       button:disabled { cursor: wait; opacity: 0.6; }
     </style>
@@ -69,13 +72,14 @@
         <h3>Expenses</h3>
         <table>
           <thead>
-            <tr><th>Description</th><th>Paid by</th><th class="amount">Amount</th></tr>
+            <tr><th>Description</th><th>Paid by</th><th class="amount">Amount</th><th></th></tr>
           </thead>
           <tbody id="expense-rows"></tbody>
           <tfoot>
-            <tr><td colspan="2">Total</td><td id="expense-total" class="amount"></td></tr>
+            <tr><td colspan="2">Total</td><td id="expense-total" class="amount"></td><td></td></tr>
           </tfoot>
         </table>
+        <p id="expense-action-error" class="error" role="alert"></p>
 
         <h3>Balances</h3>
         <p id="balances-message" class="note" hidden></p>
@@ -85,7 +89,7 @@
 
         <p id="expense-form-note" class="note" hidden>Add a member before adding expenses.</p>
         <form id="new-expense-form" hidden>
-          <h3>Add expense</h3>
+          <h3 id="expense-form-title">Add expense</h3>
           <label for="expense-description">Description</label>
           <input id="expense-description" name="description" required maxlength="200" placeholder="Dinner" />
 
@@ -100,7 +104,8 @@
             <div id="expense-split"></div>
           </fieldset>
 
-          <button type="submit">Add expense</button>
+          <button type="submit" id="expense-submit">Add expense</button>
+          <button type="reset" id="expense-cancel" hidden>Cancel</button>
           <p class="error" role="alert"></p>
         </form>
       </div>
