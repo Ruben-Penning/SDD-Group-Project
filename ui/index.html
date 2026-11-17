@@ -22,6 +22,11 @@
       fieldset { border: 1px solid #d0d7de; margin: 0.75rem 0; padding: 0.5rem 0.75rem; }
       legend { font-weight: 600; }
       .note { color: #6e7781; }
+      .owed { color: #1a7f37; }
+      .owes { color: #cf222e; }
+      #balance-list, #transfer-list { list-style: none; padding-left: 0; }
+      #balance-list li, #transfer-list li { padding: 0.2rem 0; }
+      h4 { margin-bottom: 0.25rem; }
       button { padding: 0.35rem 0.75rem; font: inherit; cursor: pointer; }
       button:disabled { cursor: wait; opacity: 0.6; }
     </style>
@@ -71,6 +76,12 @@
             <tr><td colspan="2">Total</td><td id="expense-total" class="amount"></td></tr>
           </tfoot>
         </table>
+
+        <h3>Balances</h3>
+        <p id="balances-message" class="note" hidden></p>
+        <ul id="balance-list"></ul>
+        <h4>Settle up</h4>
+        <ul id="transfer-list"></ul>
 
         <p id="expense-form-note" class="note" hidden>Add a member before adding expenses.</p>
         <form id="new-expense-form" hidden>
