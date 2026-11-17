@@ -86,7 +86,7 @@ function cell(text, className) {
 function messageRow(text) {
   const tr = document.createElement("tr");
   const td = cell(text);
-  td.colSpan = 3;
+  td.colSpan = 4;
   tr.append(td);
   return tr;
 }
@@ -184,6 +184,17 @@ async function loadMembers(groupId) {
   }
 }
 
+function actionButton(action, label, expense) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.dataset.action = action;
+  button.dataset.id = String(expense.id);
+  button.setAttribute("aria-label", `${label} ${expense.description}`);
+  return button;
+}
+
+// Draws the expenses table and returns the expenses, so Edit can prefill the form.
 async function loadExpenses(groupId, members) {
   const rows = document.getElementById("expense-rows");
   const total = document.getElementById("expense-total");
@@ -192,19 +203,25 @@ async function loadExpenses(groupId, members) {
     const names = new Map(members.map((m) => [m.id, m.name]));
     const trs = expenses.map((e) => {
       const tr = document.createElement("tr");
+      tr.dataset.id = String(e.id);
+      const actions = cell("", "actions");
+      actions.append(actionButton("edit", "Edit", e), actionButton("delete", "Delete", e));
       tr.append(
         cell(e.description),
         cell(names.get(e.paid_by_member_id) ?? "Unknown"),
         cell(formatMoney(e.amount_cents), "amount"),
+        actions,
       );
       return tr;
     });
     if (trs.length === 0) trs.push(messageRow("No expenses yet."));
     rows.replaceChildren(...trs);
     total.textContent = formatMoney(expenses.reduce((sum, e) => sum + e.amount_cents, 0));
+    return expenses;
   } catch (err) {
     rows.replaceChildren(messageRow(loadError(err, "expenses")));
     total.textContent = "";
+    return [];
   }
 }
 
@@ -225,10 +242,23 @@ async function showGroup(groupId) {
   document.getElementById("group-details").hidden = false;
 
   let members = await loadMembers(groupId);
+  let expenses = [];
+  let editingId = null; // id of the expense in the form, or null when adding a new one
+  const expenseForm = document.getElementById("new-expense-form");
+  const actionError = document.getElementById("expense-action-error");
   renderExpenseForm(members);
-  // Expenses and balances come from different services, so load them side by side:
-  // if settlements is down, the expenses part still shows (partial failure).
-  await Promise.all([loadExpenses(groupId, members), loadBalances(groupId, members)]);
+
+  // Reloads everything an expense change affects. Expenses and balances come from
+  // different services, so they load side by side: if settlements is down, the
+  // expenses part still works (partial failure).
+  async function refresh() {
+    [expenses] = await Promise.all([
+      loadExpenses(groupId, members),
+      loadBalances(groupId, members),
+    ]);
+    setExpenseFormMode(expenses.find((e) => e.id === editingId) ?? null);
+  }
+  await refresh();
 
   handleSubmit(document.getElementById("new-member-form"), async (form) => {
     const name = requiredText(form, "name", "Enter a name.");
@@ -237,21 +267,94 @@ async function showGroup(groupId) {
       body: JSON.stringify({ name }),
     });
     members = await loadMembers(groupId);
-    renderExpenseForm(members);
-    await Promise.all([loadExpenses(groupId, members), loadBalances(groupId, members)]);
+    // Redraw the expense form for the new member without losing what is filled in:
+    // an expense being edited keeps its payer and split, and the new member starts
+    // unticked there (ticked when adding a new expense).
+    redrawKeepingChoices(expenseForm, members, editingId !== null);
+    await refresh();
   });
 
-  const expenseForm = document.getElementById("new-expense-form");
+  // One form for both: POST a new expense, or PUT (same body) when editing one.
   handleSubmit(expenseForm, async (form) => {
     const body = readExpenseForm(form);
-    await api(expensesUrl, `/groups/${groupId}/expenses`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-    await Promise.all([loadExpenses(groupId, members), loadBalances(groupId, members)]);
+    const [method, path] =
+      editingId === null
+        ? ["POST", `/groups/${groupId}/expenses`]
+        : ["PUT", `/expenses/${editingId}`];
+    await api(expensesUrl, path, { method, body: JSON.stringify(body) });
+    editingId = null;
+    await refresh();
   });
-  // form.reset() unticks nothing we ticked in code, so re-tick everyone after each reset.
-  expenseForm.addEventListener("reset", () => setTimeout(() => renderExpenseForm(members)));
+
+  // Reset happens after a save and on Cancel: back to "Add expense" with everyone ticked.
+  // (setTimeout: the browser clears the fields after this event, so redraw after it.)
+  expenseForm.addEventListener("reset", () =>
+    setTimeout(() => {
+      editingId = null;
+      renderExpenseForm(members);
+      setExpenseFormMode(null);
+    }),
+  );
+
+  function startEdit(expense) {
+    editingId = expense.id;
+    renderExpenseForm(members);
+    const fields = expenseForm.elements;
+    fields.description.value = expense.description;
+    fields.amount.value = centsToText(expense.amount_cents);
+    fields.payer.value = String(expense.paid_by_member_id);
+    const sharing = new Set(expense.shares.map((s) => s.member_id));
+    for (const box of expenseForm.querySelectorAll('input[name="split"]')) {
+      box.checked = sharing.has(Number(box.value));
+    }
+    expenseForm.querySelector(".error").textContent = "";
+    setExpenseFormMode(expense);
+    expenseForm.scrollIntoView({ behavior: "smooth", block: "center" });
+    fields.description.focus();
+  }
+
+  // Edit and Delete buttons on each row (one listener for the whole table).
+  document.getElementById("expense-rows").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-action]");
+    const expense = button && expenses.find((e) => e.id === Number(button.dataset.id));
+    if (!expense) return;
+    actionError.textContent = "";
+
+    if (button.dataset.action === "edit") {
+      startEdit(expense);
+      return;
+    }
+    const label = `"${expense.description}" (${formatMoney(expense.amount_cents)})`;
+    if (!window.confirm(`Delete ${label}? Balances will update.`)) return;
+    button.disabled = true;
+    try {
+      await api(expensesUrl, `/expenses/${expense.id}`, { method: "DELETE" });
+      if (editingId === expense.id) expenseForm.reset();
+      await refresh();
+    } catch (err) {
+      actionError.textContent = formError(err);
+      button.disabled = false;
+      // Someone else already deleted it: show the list as it really is now.
+      if (err instanceof ApiError && err.status === 404) await refresh();
+    }
+  });
+}
+
+// "Add expense" vs "Edit expense: Hotel": title, button text, Cancel, row highlight.
+function setExpenseFormMode(expense) {
+  document.getElementById("expense-form-title").textContent = expense
+    ? `Edit expense: ${expense.description}`
+    : "Add expense";
+  document.getElementById("expense-submit").textContent = expense ? "Save changes" : "Add expense";
+  document.getElementById("expense-cancel").hidden = !expense;
+  for (const tr of document.querySelectorAll("#expense-rows tr")) {
+    tr.classList.toggle("editing", Boolean(expense) && tr.dataset.id === String(expense.id));
+  }
+}
+
+// 24000 -> "240.00", for putting an amount back into the form (no floats involved).
+function centsToText(cents) {
+  return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
 }
 
 // ---------- Balances and settle up (settlements-service) ----------
@@ -314,6 +417,20 @@ async function loadBalances(groupId, members) {
 
 // Fills "Paid by" and the "Split between" checkboxes from the member list.
 // Everyone is ticked by default: most expenses are shared by the whole group.
+// Like renderExpenseForm, but keeps the chosen payer and who is ticked.
+// Members that were not in the form before start ticked only when adding.
+function redrawKeepingChoices(form, members, editing) {
+  const payer = form.elements.payer.value;
+  const before = new Map(
+    [...form.querySelectorAll('input[name="split"]')].map((box) => [box.value, box.checked]),
+  );
+  renderExpenseForm(members);
+  if (payer) form.elements.payer.value = payer;
+  for (const box of form.querySelectorAll('input[name="split"]')) {
+    box.checked = before.get(box.value) ?? !editing;
+  }
+}
+
 function renderExpenseForm(members) {
   const form = document.getElementById("new-expense-form");
   const hasMembers = members.length > 0;
