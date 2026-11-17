@@ -267,7 +267,10 @@ async function showGroup(groupId) {
       body: JSON.stringify({ name }),
     });
     members = await loadMembers(groupId);
-    renderExpenseForm(members);
+    // Redraw the expense form for the new member without losing what is filled in:
+    // an expense being edited keeps its payer and split, and the new member starts
+    // unticked there (ticked when adding a new expense).
+    redrawKeepingChoices(expenseForm, members, editingId !== null);
     await refresh();
   });
 
@@ -414,6 +417,20 @@ async function loadBalances(groupId, members) {
 
 // Fills "Paid by" and the "Split between" checkboxes from the member list.
 // Everyone is ticked by default: most expenses are shared by the whole group.
+// Like renderExpenseForm, but keeps the chosen payer and who is ticked.
+// Members that were not in the form before start ticked only when adding.
+function redrawKeepingChoices(form, members, editing) {
+  const payer = form.elements.payer.value;
+  const before = new Map(
+    [...form.querySelectorAll('input[name="split"]')].map((box) => [box.value, box.checked]),
+  );
+  renderExpenseForm(members);
+  if (payer) form.elements.payer.value = payer;
+  for (const box of form.querySelectorAll('input[name="split"]')) {
+    box.checked = before.get(box.value) ?? !editing;
+  }
+}
+
 function renderExpenseForm(members) {
   const form = document.getElementById("new-expense-form");
   const hasMembers = members.length > 0;
