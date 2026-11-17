@@ -225,8 +225,10 @@ async function showGroup(groupId) {
   document.getElementById("group-details").hidden = false;
 
   let members = await loadMembers(groupId);
-  await loadExpenses(groupId, members);
   renderExpenseForm(members);
+  // Expenses and balances come from different services, so load them side by side:
+  // if settlements is down, the expenses part still shows (partial failure).
+  await Promise.all([loadExpenses(groupId, members), loadBalances(groupId, members)]);
 
   handleSubmit(document.getElementById("new-member-form"), async (form) => {
     const name = requiredText(form, "name", "Enter a name.");
@@ -235,8 +237,8 @@ async function showGroup(groupId) {
       body: JSON.stringify({ name }),
     });
     members = await loadMembers(groupId);
-    await loadExpenses(groupId, members);
     renderExpenseForm(members);
+    await Promise.all([loadExpenses(groupId, members), loadBalances(groupId, members)]);
   });
 
   const expenseForm = document.getElementById("new-expense-form");
@@ -246,10 +248,66 @@ async function showGroup(groupId) {
       method: "POST",
       body: JSON.stringify(body),
     });
-    await loadExpenses(groupId, members);
+    await Promise.all([loadExpenses(groupId, members), loadBalances(groupId, members)]);
   });
   // form.reset() unticks nothing we ticked in code, so re-tick everyone after each reset.
   expenseForm.addEventListener("reset", () => setTimeout(() => renderExpenseForm(members)));
+}
+
+// ---------- Balances and settle up (settlements-service) ----------
+
+const BALANCES_UNAVAILABLE = "Balances unavailable right now. Try again shortly.";
+
+// Positive = the group owes this member; negative = this member owes the group.
+function balanceItem(name, cents) {
+  const li = document.createElement("li");
+  const amount = document.createElement("span");
+  if (cents > 0) {
+    amount.className = "owed";
+    amount.textContent = `is owed ${formatMoney(cents)}`;
+  } else if (cents < 0) {
+    amount.className = "owes";
+    amount.textContent = `owes ${formatMoney(-cents)}`;
+  } else {
+    amount.className = "note";
+    amount.textContent = "is settled up";
+  }
+  li.append(`${name} `, amount);
+  return li;
+}
+
+// Shows each member's balance and the fewest transfers that clear them.
+// Any failure (timeout, settlements down, or expenses down behind it: 503)
+// only affects this panel; the rest of the page keeps working.
+async function loadBalances(groupId, members) {
+  const message = document.getElementById("balances-message");
+  const balanceList = document.getElementById("balance-list");
+  const transferList = document.getElementById("transfer-list");
+  try {
+    const [balances, settleUp] = await Promise.all([
+      api(settlementsUrl, `/groups/${groupId}/balances`),
+      api(settlementsUrl, `/groups/${groupId}/settle-up`),
+    ]);
+    const names = new Map(members.map((m) => [m.id, m.name]));
+    const nameOf = (id) => names.get(id) ?? `Member ${id}`;
+
+    message.hidden = true;
+    balanceList.replaceChildren(
+      ...balances.balances.map((b) => balanceItem(nameOf(b.member_id), b.balance_cents)),
+    );
+    const transfers = settleUp.transfers.map((t) =>
+      listItem(
+        `${nameOf(t.from_member_id)} pays ${nameOf(t.to_member_id)} ${formatMoney(t.amount_cents)}`,
+      ),
+    );
+    if (transfers.length === 0) transfers.push(listItem("Everyone is settled up."));
+    transferList.replaceChildren(...transfers);
+  } catch {
+    message.textContent = BALANCES_UNAVAILABLE;
+    message.hidden = false;
+    balanceList.replaceChildren();
+    transferList.replaceChildren();
+  }
 }
 
 // ---------- Add expense form ----------
