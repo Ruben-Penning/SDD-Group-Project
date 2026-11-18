@@ -1,0 +1,80 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Splitwise-lite monitoring\nRequests, error rate (5xx), latency (p50/p95) per service, and the settle-up SLO: 99% of GET /groups/{group_id}/settle-up non-5xx in under 1000 ms over 7 days."
+      },
+      "name": "title"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL\n| extend e = parse_json(Log_s)\n| where isnotempty(e.service) and tostring(e.path) != \"/health\"\n| summarize requests = count() by service = tostring(e.service), bin(TimeGenerated, 5m)\n| render timechart",
+        "size": 0,
+        "title": "Request count (per 5 min)",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "request-count"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL\n| extend e = parse_json(Log_s)\n| where isnotempty(e.service) and tostring(e.path) != \"/health\"\n| summarize total = count(), errors = countif(toint(e.status) >= 500)\n    by service = tostring(e.service), bin(TimeGenerated, 5m)\n| extend error_rate_pct = round(100.0 * errors / total, 2)\n| project TimeGenerated, service, error_rate_pct\n| render timechart",
+        "size": 0,
+        "title": "Error rate (% of requests with status >= 500)",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "error-rate"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL\n| extend e = parse_json(Log_s)\n| where isnotempty(e.service) and tostring(e.path) != \"/health\"\n| summarize p50_ms = percentile(todouble(e.duration_ms), 50),\n            p95_ms = percentile(todouble(e.duration_ms), 95)\n    by service = tostring(e.service), bin(TimeGenerated, 5m)\n| render timechart",
+        "size": 0,
+        "title": "Response time (p50 and p95, ms)",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "response-time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ContainerAppConsoleLogs_CL\n| where TimeGenerated > ago(7d)\n| extend e = parse_json(Log_s)\n| where tostring(e.service) == \"settlements\"\n    and tostring(e.method) == \"GET\"\n    and tostring(e.path) endswith \"/settle-up\"\n| summarize total = count(),\n            good = countif(toint(e.status) < 500 and todouble(e.duration_ms) < 1000)\n| extend slo_pct = round(100.0 * good / total, 2), target_pct = 99.0\n| extend met = slo_pct >= target_pct",
+        "size": 0,
+        "title": "SLO: settle-up, last 7 days",
+        "timeContext": {
+          "durationMs": 604800000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "slo-settle-up"
+    }
+  ],
+  "fallbackResourceIds": [
+    "__WORKSPACE_ID__"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
