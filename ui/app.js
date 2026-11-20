@@ -243,6 +243,7 @@ async function showGroup(groupId) {
 
   let members = await loadMembers(groupId);
   let expenses = [];
+  let money = { transfers: [], payments: [] }; // from loadBalances, for the payment buttons
   let editingId = null; // id of the expense in the form, or null when adding a new one
   const expenseForm = document.getElementById("new-expense-form");
   const actionError = document.getElementById("expense-action-error");
@@ -252,13 +253,47 @@ async function showGroup(groupId) {
   // different services, so they load side by side: if settlements is down, the
   // expenses part still works (partial failure).
   async function refresh() {
-    [expenses] = await Promise.all([
+    [expenses, money] = await Promise.all([
       loadExpenses(groupId, members),
       loadBalances(groupId, members),
     ]);
     setExpenseFormMode(expenses.find((e) => e.id === editingId) ?? null);
   }
   await refresh();
+
+  // "Mark as paid" records a suggested transfer as a payment; "Undo" deletes one.
+  // Settlements does the maths: balances and settle-up come back already updated.
+  const paymentError = document.getElementById("payment-error");
+  async function onMoneyClick(event) {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    const index = Number(button.dataset.index);
+    paymentError.textContent = "";
+    button.disabled = true;
+    try {
+      if (button.dataset.action === "pay") {
+        const t = money.transfers[index];
+        await api(settlementsUrl, `/groups/${groupId}/payments`, {
+          method: "POST",
+          body: JSON.stringify({
+            from_member_id: t.from_member_id,
+            to_member_id: t.to_member_id,
+            amount_cents: t.amount_cents,
+          }),
+        });
+      } else {
+        await api(settlementsUrl, `/payments/${money.payments[index].id}`, { method: "DELETE" });
+      }
+      await refresh();
+    } catch (err) {
+      paymentError.textContent = moneyError(err);
+      button.disabled = false;
+      // Already undone elsewhere: show the list as it really is now.
+      if (err instanceof ApiError && err.status === 404) await refresh();
+    }
+  }
+  document.getElementById("transfer-list").addEventListener("click", onMoneyClick);
+  document.getElementById("payment-list").addEventListener("click", onMoneyClick);
 
   handleSubmit(document.getElementById("new-member-form"), async (form) => {
     const name = requiredText(form, "name", "Enter a name.");
@@ -379,17 +414,40 @@ function balanceItem(name, cents) {
   return li;
 }
 
-// Shows each member's balance and the fewest transfers that clear them.
+// For the payment buttons: the API's own message for a 4xx (e.g. an invalid payment),
+// otherwise settlements (or expenses behind it) is unavailable.
+function moneyError(err) {
+  if (err instanceof ApiError && err.status < 500) return err.message;
+  return "The settlements service is unavailable right now. Try again shortly.";
+}
+
+// A list item with text and one small button, e.g. "Ben pays Ana €20.00 [Mark as paid]".
+function itemWithButton(text, label, action, index) {
+  const li = listItem(text);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.dataset.action = action;
+  button.dataset.index = String(index);
+  button.setAttribute("aria-label", `${label}: ${text}`);
+  li.append(button);
+  return li;
+}
+
+// Shows each member's balance, the fewest transfers that clear them, and the payments
+// already recorded. Returns { transfers, payments } so the buttons know what to send.
 // Any failure (timeout, settlements down, or expenses down behind it: 503)
 // only affects this panel; the rest of the page keeps working.
 async function loadBalances(groupId, members) {
   const message = document.getElementById("balances-message");
   const balanceList = document.getElementById("balance-list");
   const transferList = document.getElementById("transfer-list");
+  const paymentList = document.getElementById("payment-list");
   try {
-    const [balances, settleUp] = await Promise.all([
+    const [balances, settleUp, payments] = await Promise.all([
       api(settlementsUrl, `/groups/${groupId}/balances`),
       api(settlementsUrl, `/groups/${groupId}/settle-up`),
+      api(settlementsUrl, `/groups/${groupId}/payments`),
     ]);
     const names = new Map(members.map((m) => [m.id, m.name]));
     const nameOf = (id) => names.get(id) ?? `Member ${id}`;
@@ -398,18 +456,36 @@ async function loadBalances(groupId, members) {
     balanceList.replaceChildren(
       ...balances.balances.map((b) => balanceItem(nameOf(b.member_id), b.balance_cents)),
     );
-    const transfers = settleUp.transfers.map((t) =>
-      listItem(
+
+    const transfers = settleUp.transfers.map((t, i) =>
+      itemWithButton(
         `${nameOf(t.from_member_id)} pays ${nameOf(t.to_member_id)} ${formatMoney(t.amount_cents)}`,
+        "Mark as paid",
+        "pay",
+        i,
       ),
     );
     if (transfers.length === 0) transfers.push(listItem("Everyone is settled up."));
     transferList.replaceChildren(...transfers);
+
+    const paid = payments.map((p, i) =>
+      itemWithButton(
+        `${nameOf(p.from_member_id)} paid ${nameOf(p.to_member_id)} ${formatMoney(p.amount_cents)}`,
+        "Undo",
+        "undo",
+        i,
+      ),
+    );
+    if (paid.length === 0) paid.push(listItem("No payments recorded yet."));
+    paymentList.replaceChildren(...paid);
+    return { transfers: settleUp.transfers, payments };
   } catch {
     message.textContent = BALANCES_UNAVAILABLE;
     message.hidden = false;
     balanceList.replaceChildren();
     transferList.replaceChildren();
+    paymentList.replaceChildren();
+    return { transfers: [], payments: [] };
   }
 }
 
