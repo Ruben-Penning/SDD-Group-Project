@@ -20,7 +20,7 @@ rotate=false
 [[ "${1:-}" == "--rotate-secrets" ]] && rotate=true
 
 echo "Registering resource providers (first time only, can take a few minutes)"
-for ns in Microsoft.App Microsoft.OperationalInsights Microsoft.Sql Microsoft.Storage Microsoft.ManagedIdentity; do
+for ns in Microsoft.App Microsoft.OperationalInsights Microsoft.Sql Microsoft.Storage Microsoft.ManagedIdentity Microsoft.Insights; do
   az provider register --namespace "$ns" --wait --output none
 done
 
