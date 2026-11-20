@@ -67,5 +67,6 @@ ContainerAppConsoleLogs_CL
 ```
 
 **Cold starts:** both Container Apps scale to zero and the databases auto-pause, so the
-first request after idle can take tens of seconds. The SLO measures the service while
-it is running; cold starts are a deliberate cost trade-off, recorded in `decisions.md`.
+first request after idle can take about 30 seconds. The query counts those requests like
+any other, so with little traffic a few cold starts can push the SLO below 99%. We keep
+scale to zero on purpose to keep cost near zero; see ADR 4 in `decisions.md`.
