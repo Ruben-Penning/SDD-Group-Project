@@ -68,3 +68,12 @@ def test_payer_must_be_in_group():
 def test_shared_members_must_be_in_group():
     with pytest.raises(InvalidExpenseError, match=r"not in this group: \[8, 9\]"):
         check_members_in_group(1, [1, 9, 8], {1, 2})
+
+
+def test_amount_up_to_one_million_is_allowed():
+    assert split_equally(100_000_000, [1]) == {1: 100_000_000}
+
+
+def test_amount_above_one_million_is_rejected():
+    with pytest.raises(InvalidExpenseError, match="at most 100000000"):
+        split_equally(100_000_001, [1])

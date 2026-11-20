@@ -86,6 +86,7 @@ def test_unknown_group_is_404(client):
     "overrides,detail",
     [
         ({"amount_cents": 0}, "amount_cents must be greater than 0"),
+        ({"amount_cents": 3_000_000_000}, "amount_cents must be at most 100000000 (1,000,000.00)"),
         ({"member_ids": []}, "member_ids must contain at least one member"),
         ({"description": " "}, "description must not be empty"),
         ({"paid_by_member_id": 99}, "paid_by_member_id is not a member of this group"),
