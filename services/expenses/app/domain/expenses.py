@@ -1,6 +1,10 @@
 """Rules for adding an expense. Pure functions: no database or HTTP imports."""
 
 MAX_DESCRIPTION_LENGTH = 200
+# amount_cents is an INT column, which SQL Server caps at 2,147,483,647 (about 21 million
+# euros); anything above it fails in the database with a 500. One million euros is far
+# beyond any shared expense, so reject larger amounts up front with a clear 400.
+MAX_AMOUNT_CENTS = 100_000_000
 
 
 class InvalidExpenseError(ValueError):
@@ -38,6 +42,8 @@ def split_equally(amount_cents: int, member_ids: list[int]) -> dict[int, int]:
     """
     if amount_cents <= 0:
         raise InvalidExpenseError("amount_cents must be greater than 0")
+    if amount_cents > MAX_AMOUNT_CENTS:
+        raise InvalidExpenseError(f"amount_cents must be at most {MAX_AMOUNT_CENTS} (1,000,000.00)")
     if not member_ids:
         raise InvalidExpenseError("member_ids must contain at least one member")
     if len(set(member_ids)) != len(member_ids):
