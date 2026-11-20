@@ -24,8 +24,9 @@
       .note { color: #6e7781; }
       .owed { color: #1a7f37; }
       .owes { color: #cf222e; }
-      #balance-list, #transfer-list { list-style: none; padding-left: 0; }
-      #balance-list li, #transfer-list li { padding: 0.2rem 0; }
+      #balance-list, #transfer-list, #payment-list { list-style: none; padding-left: 0; }
+      #balance-list li, #transfer-list li, #payment-list li { padding: 0.2rem 0; }
+      #transfer-list button, #payment-list button { padding: 0.1rem 0.5rem; font-size: 0.9rem; margin-left: 0.5rem; }
       h4 { margin-bottom: 0.25rem; }
       .actions { text-align: right; white-space: nowrap; }
       .actions button { padding: 0.15rem 0.5rem; font-size: 0.9rem; margin-left: 0.25rem; }
@@ -86,6 +87,9 @@
         <ul id="balance-list"></ul>
         <h4>Settle up</h4>
         <ul id="transfer-list"></ul>
+        <h4>Payments</h4>
+        <ul id="payment-list"></ul>
+        <p id="payment-error" class="error" role="alert"></p>
 
         <p id="expense-form-note" class="note" hidden>Add a member before adding expenses.</p>
         <form id="new-expense-form" hidden>
