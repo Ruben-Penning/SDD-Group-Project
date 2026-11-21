@@ -99,6 +99,9 @@ function currentGroupId() {
 // A problem with what the user typed, caught before calling the API.
 class FormError extends Error {}
 
+// Same limit as expenses-service (#49): one million euros, in cents.
+const MAX_AMOUNT_CENTS = 100_000_000;
+
 // Turns what the user typed ("12", "12.5", "12,50") into integer cents, without
 // going through a float, so 0.1 + 0.2 rounding can never creep in.
 function parseAmountToCents(text) {
@@ -106,7 +109,21 @@ function parseAmountToCents(text) {
   if (!match) throw new FormError("Enter an amount like 12.50 (up to 2 decimals).");
   const cents = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
   if (cents === 0) throw new FormError("The amount must be more than 0.");
+  if (cents > MAX_AMOUNT_CENTS) {
+    throw new FormError(`The amount can be at most ${formatMoney(MAX_AMOUNT_CENTS)}.`);
+  }
   return cents;
+}
+
+// A short success message at the bottom of the page that fades out on its own.
+// A new message replaces the old one and restarts the timer.
+let toastTimer;
+function toast(message) {
+  const el = document.getElementById("toast");
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 3000);
 }
 
 function requiredText(form, field, message) {
@@ -271,6 +288,8 @@ async function showGroup(groupId) {
     paymentError.textContent = "";
     button.disabled = true;
     try {
+      const nameOf = (id) => members.find((m) => m.id === id)?.name ?? `Member ${id}`;
+      let done;
       if (button.dataset.action === "pay") {
         const t = money.transfers[index];
         await api(settlementsUrl, `/groups/${groupId}/payments`, {
@@ -281,10 +300,13 @@ async function showGroup(groupId) {
             amount_cents: t.amount_cents,
           }),
         });
+        done = `Payment recorded: ${nameOf(t.from_member_id)} paid ${nameOf(t.to_member_id)} ${formatMoney(t.amount_cents)}`;
       } else {
         await api(settlementsUrl, `/payments/${money.payments[index].id}`, { method: "DELETE" });
+        done = "Payment undone";
       }
       await refresh();
+      toast(done);
     } catch (err) {
       paymentError.textContent = moneyError(err);
       button.disabled = false;
@@ -307,6 +329,7 @@ async function showGroup(groupId) {
     // unticked there (ticked when adding a new expense).
     redrawKeepingChoices(expenseForm, members, editingId !== null);
     await refresh();
+    toast(`${name} added to the group`);
   });
 
   // One form for both: POST a new expense, or PUT (same body) when editing one.
@@ -317,8 +340,14 @@ async function showGroup(groupId) {
         ? ["POST", `/groups/${groupId}/expenses`]
         : ["PUT", `/expenses/${editingId}`];
     await api(expensesUrl, path, { method, body: JSON.stringify(body) });
+    const wasEditing = editingId !== null;
     editingId = null;
     await refresh();
+    toast(
+      wasEditing
+        ? `Changes to "${body.description}" saved`
+        : `"${body.description}" added successfully`,
+    );
   });
 
   // Reset happens after a save and on Cancel: back to "Add expense" with everyone ticked.
@@ -366,6 +395,7 @@ async function showGroup(groupId) {
       await api(expensesUrl, `/expenses/${expense.id}`, { method: "DELETE" });
       if (editingId === expense.id) expenseForm.reset();
       await refresh();
+      toast(`"${expense.description}" deleted`);
     } catch (err) {
       actionError.textContent = formError(err);
       button.disabled = false;
