@@ -194,3 +194,18 @@ output expensesUrl string = expenses.outputs.url
 output settlementsUrl string = settlements.outputs.url
 output uiUrl string = uiOrigin
 output uiStorageAccount string = uiStorage.name
+
+// ---------- Monitoring dashboard: an Azure Workbook on the logs workspace ----------
+// The tiles and queries live in workbook.json (exported from the portal).
+
+resource workbook 'Microsoft.Insights/workbooks@2023-06-01' = {
+  name: guid(resourceGroup().id, 'splitwise-monitoring')
+  location: location
+  kind: 'shared'
+  properties: {
+    displayName: 'Splitwise-lite monitoring'
+    category: 'workbook'
+    sourceId: toLower(logs.id)
+    serializedData: replace(loadTextContent('workbook.json'), '__WORKSPACE_ID__', logs.id)
+  }
+}
