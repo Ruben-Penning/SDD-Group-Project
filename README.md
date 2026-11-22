@@ -5,7 +5,7 @@ A web app where a group logs shared expenses and sees the fewest transfers neede
 
 **Live URL:** https://stuirahgkb56ldciu.z1.web.core.windows.net (deployed by CD on every merge to `main`)
 
-**Backlog (GitHub Project):** (https://github.com/users/athulgokuldas22/projects/3)
+**Backlog (GitHub Project):** https://github.com/users/athulgokuldas22/projects/3
 
 ## Architecture
 
@@ -20,7 +20,39 @@ Two FastAPI services, each in its own container with its own database. A static 
 settlements-service reads each group's ledger from expenses-service over HTTP.
 Each service is layered: `app/api` (HTTP) → `app/domain` (business rules) → `app/db` (persistence).
 
-_Architecture diagram: added with the Azure setup._
+```mermaid
+flowchart LR
+    user([Browser])
+
+    subgraph azure["Azure: rg-sdd-splitwise (Germany West Central)"]
+        ui["UI<br/>Storage static website<br/>index.html, app.js, config.js"]
+        subgraph env["Container Apps environment (0-1 replicas each)"]
+            exp["expenses-service<br/>FastAPI"]
+            set["settlements-service<br/>FastAPI"]
+        end
+        expdb[("expenses DB<br/>Azure SQL serverless")]
+        setdb[("settlements DB<br/>Azure SQL serverless")]
+        logs["Log Analytics<br/>sdd-splitwise-logs"]
+        wb["Workbook<br/>dashboard + SLO"]
+    end
+
+    subgraph github["GitHub"]
+        actions["Actions<br/>CI on every PR, CD on merge"]
+        ghcr["GHCR<br/>images tagged by SHA"]
+    end
+
+    user -->|loads the page| ui
+    user -->|"HTTPS + X-API-Key (CORS: UI origin only)"| exp
+    user -->|"HTTPS + X-API-Key (CORS: UI origin only)"| set
+    set -->|"GET /groups/{id}/ledger, 2 s timeout"| exp
+    exp --> expdb
+    set --> setdb
+    env -.->|stdout: one JSON line per request| logs
+    logs --> wb
+    actions -->|push images| ghcr
+    ghcr -->|pull| env
+    actions -->|"OIDC sign-in, Bicep deploy, /health check"| azure
+```
 
 ## Run locally
 
@@ -137,6 +169,35 @@ Both services scale to zero and the databases auto-pause, so the first request a
 spell can take up to a minute or two. Settlements calls expenses with a 2 s timeout, so the first
 balances call after idle may return 503 ("try again shortly"); the next one works. Open the UI a
 minute before a demo.
+
+## Monitoring
+
+Both services write one JSON line per request to stdout (`service`, `method`, route
+template as `path`, `status`, `duration_ms`). The Container Apps environment sends it to the
+`sdd-splitwise-logs` Log Analytics workspace (table `ContainerAppConsoleLogs_CL`).
+
+- **Dashboard:** the Azure Workbook **Splitwise-lite monitoring** (Portal →
+  `sdd-splitwise-logs` → Workbooks), with request count, error rate (5xx) and p50/p95
+  response time per service, plus the SLO. It is defined in
+  [`infra/workbook.json`](infra/workbook.json) and deployed by CD, not created by hand.
+- **SLO:** 99% of `GET /groups/{group_id}/settle-up` requests return a non-5xx status in
+  under 1000 ms, over 7 days. Cold starts count against it (see ADR 4).
+- **Queries:** all of them, including the SLO query, are in
+  [`docs/monitoring/queries.md`](docs/monitoring/queries.md).
+- **Partial failure:** if settlements-service is down, groups and expenses keep working and
+  the balances panel says balances are unavailable. If expenses-service is down,
+  settlements stops waiting after 2 s and returns 503 with a clear message. The UI gives
+  up on any call after 5 s, so nothing hangs.
+
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [`docs/decisions.md`](docs/decisions.md) | 5 decision records: architecture, storage, hosting, monitoring, CI/CD |
+| [`docs/data-model.md`](docs/data-model.md) | Entities, relationships (diagram) and how balances are derived |
+| [`docs/monitoring/queries.md`](docs/monitoring/queries.md) | Log Analytics queries for the dashboard and the SLO |
+| [`docs/scrum/`](docs/scrum/) | Definition of Done and one record per sprint (goal, items, review, retro) |
+| [`AI_USAGE.md`](AI_USAGE.md) | Every significant AI-assisted piece of work |
 
 ## Team
 
