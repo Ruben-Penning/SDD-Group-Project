@@ -4,7 +4,7 @@
     {
       "type": 1,
       "content": {
-        "json": "## Splitwise-lite monitoring\nRequests, error rate (5xx), latency (p50/p95) per service, and the settle-up SLO: 99% of GET /groups/{group_id}/settle-up non-5xx in under 1000 ms over 7 days."
+        "json": "## Splitwise-lite monitoring\nRequests, error rate (5xx), latency (p50/p95) per service, and the settle-up SLO: 99% of GET /groups/:id/settle-up non-5xx in under 1000 ms over 7 days."
       },
       "name": "title"
     },
