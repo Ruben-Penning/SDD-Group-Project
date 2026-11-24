@@ -46,16 +46,44 @@ Supporting work (not separate stories):
 - `AI_USAGE.md` conflicts are never real: keep both rows, in date order.
 - No force pushes to `main`.
 
-## Sprint Review
+## Sprint Review (24 Nov)
 
-_Added at the Sprint 2 Review._
+Sprint Goal met: the MVP is complete on the live URL and tagged `v0.2`. Written at the end
+of the sprint, before the `submission` tag; the live demo is at the class Sprint Review
+(25–26 Nov).
 
 ### Done
 
+- #23 Settle up with the fewest transfers (#44; UI #46)
+- #24 Record a payment (#29; UI #52)
+- #25 Clear message when a service is down: the UI gives up after 5 s and shows
+  "unavailable" for the affected panel only; settlements returns 503 after 2 s if expenses
+  is down
+- #26 Monitoring dashboard and SLO: queries (#34), Workbook deployed by Bicep (#51),
+  decision records for monitoring and CI/CD (#53)
+- Supporting: amount limit of 1,000,000.00 (#49), success messages in the UI (#54),
+  final README with the architecture diagram (#55), tags `v0.1` and `v0.2`
+
 ### Not done
+
+- Post-deploy smoke test against the live URL in CD
+- Blue-green deploys with Container Apps revisions (we still run in single-revision mode)
+- Stretch stories #27 (unequal splits) and #28 (other currencies)
 
 ## Retrospective
 
-_Added at the Sprint 2 Retrospective._
+**Went well:** the MVP was complete two days before the deadline; the dashboard and the
+SLO are part of the infrastructure, not built by hand.
+
+**To improve:** not everyone had Azure access, so the partial-failure test depended on one
+person; the smoke test and blue-green slipped because the first deploy came late.
 
 ### Agreements
+
+- Give every member Azure access on day one.
+- Get the pipeline and a first deploy working before any feature work.
+
+## Next sprint
+
+If we had another sprint: the smoke test and blue-green deploys in CD, the two stretch
+stories (#27, #28), and moving to the professor's resource group if he confirms it.
